@@ -216,18 +216,15 @@ def generate_html(sections_data) -> str:
 def update_target_file(target_file: str, new_content: str, dry_run: bool = False) -> bool:
     """Replaces content between START_MARKER and END_MARKER in target_file."""
     if not os.path.exists(target_file):
-        print(f"Error: Target file not found: {target_file}", file=sys.stderr)
-        return False
+        raise FileNotFoundError(f"Target file not found: {target_file}")
 
     with open(target_file, "r", encoding="utf-8") as f:
         file_content = f.read()
 
     if START_MARKER not in file_content or END_MARKER not in file_content:
-        print(
-            f"Error: Markers '{START_MARKER}' and '{END_MARKER}' must exist in {target_file}",
-            file=sys.stderr,
+        raise ValueError(
+            f"Markers '{START_MARKER}' and '{END_MARKER}' must exist in {target_file}"
         )
-        return False
 
     pattern = re.compile(
         rf"({re.escape(START_MARKER)}\n).*?(\n\s*{re.escape(END_MARKER)})",
@@ -238,8 +235,7 @@ def update_target_file(target_file: str, new_content: str, dry_run: bool = False
     updated_file_content, count = pattern.subn(replacement, file_content)
 
     if count == 0:
-        print("Error: Could not substitute content between markers.", file=sys.stderr)
-        return False
+        raise ValueError("Could not substitute content between markers.")
 
     if updated_file_content == file_content:
         print("No changes detected. Target file is already up to date.")
@@ -283,9 +279,17 @@ def main():
     for sec_title, papers in sections_data:
         print(f"  - {sec_title}: {len(papers)} papers")
 
+    if total_papers == 0:
+        print("Error: No publications parsed. Aborting to avoid wiping target file.", file=sys.stderr)
+        sys.exit(1)
+
     new_html = generate_html(sections_data)
-    changed = update_target_file(args.file, new_html, dry_run=args.dry_run)
-    sys.exit(0 if not changed and not args.dry_run else 0)
+    try:
+        update_target_file(args.file, new_html, dry_run=args.dry_run)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
